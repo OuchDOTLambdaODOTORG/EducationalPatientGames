@@ -1,23 +1,40 @@
 //game state for game1
-var game1 = function(game) {
-    var safeChildren;
-    var unsafeChildren;
-    var score;
-    var scoreText;
-    var errorText;
-    var errorTextTimer;
-    var successText;
-    var successTextTimer;
-    var victoryText;
-    var textStyle;
+//TODO: stuff I added doesn't really work with current win condition, but if instead of random movement they follow a path it might work better and be really neat
+var game1 = function (game) {
 };
+var safeChildren;
+var unsafeChildren;
+var score;
+var scoreText;
+var errorText;
+var errorTextTimer;
+var successText;
+var successTextTimer;
+var victoryText;
+var textStyle;
 
 game1.prototype = {
     create: function () {
         unsafeChildren = this.game.add.group();
         safeChildren = this.game.add.group();
-        this.placeRandomChildren(unsafeChildren, 'unsafe', this.onUnsafeClick);
-        this.placeRandomChildren(safeChildren, 'safe', this.onSafeClick);
+
+        /***** Currently disabled random creation to try "spawn points" *****/
+
+            // this.placeRandomChildren(unsafeChildren, 'unsafe', this.onUnsafeClick);
+            // this.placeRandomChildren(safeChildren, 'safe', this.onSafeClick);
+
+        //Note: current victory conditions require that some unsafe children be created on load or instant win will occur
+        this.createChild(50, 50, "right", unsafeChildren, 'unsafe', this.onUnsafeClick);
+        this.createChild(50, 50, "down", unsafeChildren, 'unsafe', this.onUnsafeClick);
+        this.createChild(200, 200, "down", safeChildren, 'safe', this.onSafeClick);
+
+        this.startSpawn(5, 0, 250, "right", unsafeChildren, 'unsafe', this.onUnsafeClick);
+        this.startSpawn(3, 0, 250, "right", safeChildren, 'safe', this.onSafeClick);
+
+        //This will allow to check num of living unsafe children to see if offscreen are killed
+        //this.game.time.events.loop(Phaser.Timer.SECOND * 3, this.announceLiving);
+
+
         textStyle = {font: '16px Arial', fill: '#ffffff', align: 'center', wordWrap: true};
         score = 0;
         scoreText = this.game.add.text(0, 0, 'Score:' + score, {fill: '#ffffff'});
@@ -45,27 +62,66 @@ game1.prototype = {
         if (unsafeChildren.countLiving() === 0)
             this.victory();
 
+        //Trying out movement stuff
+
+        for (var i = 0; i < unsafeChildren.children.length; i++) {
+            var currentChild = unsafeChildren.children[i];
+            if (currentChild.alive)
+                currentChild.move();
+            if (currentChild.position.x > this.game.width || currentChild.position.x < 0 || currentChild.position.y > this.game.height || currentChild.position.y < 0){
+                currentChild.kill();//weird stuff still happening with killing offscreen?
+            }
+            if (Math.random() > .98) {
+                this.changeDirection(currentChild);
+            }
+
+        }
+        for (var i = 0; i < safeChildren.children.length; i++) {
+            var currentChild = safeChildren.children[i];
+            if (currentChild.alive)
+                currentChild.move();
+            if (currentChild.position.x > this.game.width || currentChild.position.x < 0 || currentChild.position.y > this.game.height || currentChild.position.y < 0){
+                currentChild.kill(); //weird stuff still happening with killing offscreen?
+            }
+            if (Math.random() > .98) {
+                this.changeDirection(currentChild);
+            }
+        }
+
+
     },
 
     onSafeClick: function (sprite) {
         score -= 1;
         successText.visible = false;
         errorTextTimer = this.game.time.now + 500; //error text will be displayed for 500 ms when a safe child is clicked
+        errorText.position.x = sprite.position.x;
+        errorText.position.y = sprite.position.y + sprite.height;
         errorText.visible = true;
 
     },
 
     onUnsafeClick: function (sprite) {
         score += 1;
-        var safeChild = safeChildren.create(sprite.position.x, sprite.position.y, 'safe');
-        safeChild.inputEnabled = true;
-        safeChild.events.onInputDown.add(this.onSafeClick, this);
-        safeChild.scale.x = 0.25;
-        safeChild.scale.y = 0.25;
-        safeChild.outOfBoundsKill = true;
+
+        // alert(sprite.position.x + " " + sprite.position.y + " " + sprite.direction + " ");
+        /*
+         var safeChild = safeChildren.create(0, 0, 'safe'); //place at (0,0) first so the anchor can be set before placement
+         safeChild.inputEnabled = true;
+         safeChild.events.onInputDown.add(this.onSafeClick, this);
+         safeChild.scale.x = 0.25;
+         safeChild.scale.y = 0.25;
+         safeChild.anchor.set(0.5);
+         safeChild.position.x = sprite.position.x;
+         safeChild.position.y = sprite.position.y;
+         safeChild.outOfBoundsKill = true;
+         */
+        this.createChild(sprite.position.x, sprite.position.y, sprite.direction, safeChildren, 'safe', this.onSafeClick);
         sprite.kill(); //todo: implement a sprite recycling mechanism with some maximum amount of safe and unsafe sprites visible at a time
         errorText.visible = false;
         successTextTimer = this.game.time.now + 500;
+        successText.position.x = safeChild.position.x;
+        successText.position.y = safeChild.position.y + safeChild.height;
         successText.visible = true;
     },
 
@@ -76,17 +132,88 @@ game1.prototype = {
         errorText.visible = false;
         successText.visible = false;
         victoryText.visible = true;
-        this.game.state.start("Victory1",true,false);
+        this.game.state.start("Victory1", true, false);
     },
 
     placeRandomChildren: function (group, spriteName, listener) {
         for (var i = 0; i < 3; i++) {
-            var child = group.create(this.game.world.randomX, this.game.world.randomY, spriteName);
+            var child;
+            child = group.create(0, 0, spriteName);
             child.inputEnabled = true;
             child.events.onInputDown.add(listener, this);
+            child.anchor.set(0.5);
+            child.position.x = this.game.world.randomX;
+            child.position.y = this.game.world.randomY;
         }
         group.setAll('scale.x', 0.25);
         group.setAll('scale.y', 0.25);
         group.setAll('outOfBoundsKill', true);
+    },
+
+
+    startSpawn: function (timeDelay, x, y, direction, group, spriteName, listener) {
+        var delayTime = Phaser.Timer.SECOND * timeDelay;
+        this.game.time.events.loop(delayTime, this.createChild,this, x, y, direction, group, spriteName, listener);
+
+
+    },
+
+    createChild: function (startx, starty, direction, group, spriteName, listener) {
+        var child;
+        child = group.create(0, 0, spriteName);
+        child.inputEnabled = true;
+        child.events.onInputDown.add(listener, this);
+        child.anchor.set(0.5);
+        child.position.x = startx;
+        child.position.y = starty;
+        child.direction = direction;
+        child.scale.x = .25;
+        child.scale.y = .25;
+        child.outOfBoundsKill = true;        //Not sure if outOfBoundsKill is doing it's job
+
+        child.move = function () {
+            if (this.direction === "up") {
+                this.position.y--;
+            }
+            else if (this.direction === "down") {
+                this.position.y++;
+            }
+            else if (this.direction === "left") {
+                this.position.x--;
+            }
+            else if (this.direction === "right") {
+                this.position.x++;
+            }
+        };
+        //group.setAll('scale.x', 0.25);
+        //group.setAll('scale.y', 0.25);
+        //group.setAll('outOfBoundsKill', true);
+    },
+
+    //NOTE: Since sprites die offscreen I don't worry about them randomly going off screen.
+    //TODO: plan to plot movement along background instead of random movement, random movement just for demo purposes
+    changeDirection: function(sprite){
+        var randNum = Math.round(Math.random() * (100));
+        if (randNum < 25){
+            sprite.direction = "left";
+        }
+        else if (randNum < 50){
+            sprite.direction = "right";
+        }
+        else if (randNum < 75){
+            sprite.direction = "up";
+        }
+        else{
+            sprite.direction = "down";
+
+        }
+    },
+
+    //Function I was using to check what unsafe children were still alive to monitor killing the offscreen children
+    announceLiving: function(){
+        alert(this.unsafeChildren.countLiving());
     }
-}
+
+
+};
+
